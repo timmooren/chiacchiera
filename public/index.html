@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chiacchiera</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,ital,wght@9..144,0,400..700;9..144,1,400..700&family=Karla:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<main id="start-screen" class="screen screen-start">
+  <header class="start-header">
+    <h1 class="app-title">Chiacchiera</h1>
+    <p class="tagline">Learn by chatting — Italian &amp; Spanish conversation practice.</p>
+  </header>
+
+  <section class="picker" aria-labelledby="language-heading">
+    <h2 id="language-heading" class="picker-heading">Choose a language</h2>
+    <div class="language-grid" role="group" aria-labelledby="language-heading">
+      <button type="button" class="language-card" data-language="italian" aria-pressed="false">
+        <span class="language-flag" aria-hidden="true">🇮🇹</span>
+        <span class="language-name">Italiano</span>
+      </button>
+      <button type="button" class="language-card" data-language="spanish" aria-pressed="false">
+        <span class="language-flag" aria-hidden="true">🇪🇸</span>
+        <span class="language-name">Español</span>
+      </button>
+    </div>
+  </section>
+
+  <section class="picker" aria-labelledby="topic-heading">
+    <h2 id="topic-heading" class="picker-heading">Pick a topic</h2>
+    <div class="topic-grid" id="topic-grid" role="group" aria-labelledby="topic-heading"></div>
+  </section>
+
+  <button type="button" id="start-button" class="start-button" disabled>Start conversation</button>
+</main>
+
+<main id="chat-screen" class="screen screen-chat" hidden>
+  <header class="chat-header">
+    <button type="button" id="new-chat-button" class="new-chat-button">
+      <span aria-hidden="true">←</span> New chat
+    </button>
+    <div class="chat-context">
+      <span id="chat-flag" class="chat-flag" aria-hidden="true"></span>
+      <span id="chat-topic" class="chat-topic"></span>
+    </div>
+  </header>
+
+  <div id="chat-log" class="chat-log" role="log" aria-live="polite" aria-label="Conversation"></div>
+
+  <footer class="input-area">
+    <div id="error-notice" class="error-notice" role="alert" hidden>
+      <span id="error-text" class="error-text"></span>
+      <button type="button" id="error-dismiss" class="error-dismiss" aria-label="Dismiss error">✕</button>
+    </div>
+    <form id="chat-form" class="chat-form">
+      <label class="visually-hidden" for="chat-input">Your message</label>
+      <textarea id="chat-input" class="chat-input" rows="1" placeholder="Write a message…" autocomplete="off"></textarea>
+      <button type="submit" id="send-button" class="send-button" aria-label="Send message">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+          <path d="M3 11.5 20.5 3.8c.7-.3 1.4.4 1.1 1.1L13.9 22.4c-.3.7-1.4.7-1.6-.1l-1.9-6.5a1 1 0 0 0-.7-.7l-6.6-2c-.8-.2-.8-1.3-.1-1.6Z" fill="currentColor"/>
+        </svg>
+      </button>
+    </form>
+  </footer>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
