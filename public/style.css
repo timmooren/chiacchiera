@@ -1,4 +1,5 @@
 :root {
+  color-scheme: light dark;
   --ceramic: #F7F9F7;
   --cobalt: #1F4FA3;
   --cobalt-deep: #163A7A;
@@ -489,6 +490,89 @@ button {
 
   .topic-label {
     font-size: 0.8rem;
+  }
+}
+
+/* ---------- Dark mode: evening piazza ---------- */
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ceramic: #131A2A;
+    --cobalt: #6E96E8;
+    --cobalt-deep: #2B4A8F;
+    --ink: #E8EBF2;
+    --basil: #7FBF8E;
+    --cobalt-wash: rgba(110, 150, 232, 0.14);
+    --cobalt-border: rgba(110, 150, 232, 0.4);
+    --muted: #9AA3B5;
+  }
+
+  .language-card {
+    background: #1C2438;
+    background-image: linear-gradient(#1C2438, #1C2438),
+      repeating-linear-gradient(
+        90deg,
+        var(--cobalt) 0 14px,
+        var(--lemon) 14px 20px,
+        var(--cobalt-deep) 20px 34px,
+        var(--lemon) 34px 40px
+      );
+    background-origin: padding-box, border-box;
+    background-clip: padding-box, border-box;
+  }
+
+  .language-card:hover {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+  }
+
+  .language-card[aria-pressed="true"] {
+    box-shadow: 0 0 0 2px var(--cobalt), 0 6px 16px rgba(0, 0, 0, 0.5), inset 0 -4px 0 var(--lemon);
+  }
+
+  .topic-card {
+    background: #1C2438;
+  }
+
+  .topic-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  }
+
+  .topic-card[aria-pressed="true"] {
+    box-shadow: inset 0 -4px 0 var(--lemon), 0 4px 12px rgba(0, 0, 0, 0.4);
+  }
+
+  .chat-header {
+    background: var(--cobalt-deep);
+  }
+
+  .bubble-user {
+    background: #1C2438;
+  }
+
+  .correction {
+    border-top-color: rgba(127, 191, 142, 0.55);
+  }
+
+  .input-area {
+    border-top-color: rgba(110, 150, 232, 0.22);
+  }
+
+  .error-notice {
+    background: #3A241C;
+    border-color: #B06A4E;
+    color: #F2C4AC;
+  }
+
+  .error-dismiss:hover {
+    background: rgba(242, 196, 172, 0.14);
+  }
+
+  .chat-input {
+    background: #1C2438;
+  }
+
+  .send-button:disabled {
+    background: rgba(110, 150, 232, 0.3);
   }
 }
 
