@@ -37,7 +37,7 @@ const respondTool = {
       correctionNote: {
         type: ["string", "null"],
         description:
-          "One short English sentence explaining the main fix or a useful nuance. null if correction is null.",
+          "One short sentence explaining the main fix or a useful nuance. ALWAYS write correctionNote in English, NEVER in the target language (Italian/Spanish) — it is a grammar explanation for an English-speaking learner. null if correction is null.",
       },
     },
     required: ["reply", "correction", "correctionNote"],
@@ -53,7 +53,8 @@ Rules:
 - Always keep the conversation going: react to what the learner said, then ask a follow-up question.
 - Match the learner's apparent level — use simpler language if they seem to struggle.
 - Stay loosely on the topic of ${topic}, but follow the learner's lead if they drift.
-- Fill in the "respond" tool's correction and correctionNote fields exactly per their descriptions, based on the learner's latest message.`;
+- Fill in the "respond" tool's correction and correctionNote fields exactly per their descriptions, based on the learner's latest message.
+- correctionNote MUST ALWAYS be written in English, never in ${languageName} — it is a grammar explanation for an English-speaking learner. Only the reply and correction fields are in ${languageName}.`;
 }
 
 function validateBody(body) {
