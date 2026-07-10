@@ -500,9 +500,20 @@ button {
 }
 
 @media (max-width: 380px) {
-  .topic-grid,
-  .language-grid {
-    grid-template-columns: 1fr;
+  .language-card {
+    padding: 1.1rem 0.6rem 1rem;
+  }
+
+  .language-name {
+    font-size: 1.1rem;
+  }
+
+  .topic-card {
+    padding: 0.7rem 0.4rem;
+  }
+
+  .topic-label {
+    font-size: 0.8rem;
   }
 }
 
