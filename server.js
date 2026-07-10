@@ -57,6 +57,55 @@ Rules:
 - correctionNote MUST ALWAYS be written in English, never in ${languageName} — it is a grammar explanation for an English-speaking learner. Only the reply and correction fields are in ${languageName}.`;
 }
 
+/**
+ * Incrementally extracts the string value of the "reply" field from a stream
+ * of partial JSON fragments (the tool input arrives as input_json_delta
+ * events). Returns the NEW decoded text produced by each pushed fragment.
+ * Handles JSON string escapes (\", \\, \n, \uXXXX, ...) that may be split
+ * across fragments: incomplete escape sequences stay unconsumed until the
+ * rest arrives. Stops emitting at the unescaped closing quote.
+ */
+function createReplyExtractor() {
+  const ESCAPES = { '"': '"', "\\": "\\", "/": "/", n: "\n", r: "\r", t: "\t", b: "\b", f: "\f" };
+  let raw = "";
+  let pos = -1; // index into raw of the next undecoded char; -1 until value start found
+  let done = false;
+
+  return function push(fragment) {
+    if (done) return "";
+    raw += fragment;
+    if (pos === -1) {
+      const match = raw.match(/"reply"\s*:\s*"/);
+      if (!match) return "";
+      pos = match.index + match[0].length;
+    }
+    let out = "";
+    while (pos < raw.length) {
+      const ch = raw[pos];
+      if (ch === '"') {
+        done = true;
+        break;
+      }
+      if (ch === "\\") {
+        const esc = raw[pos + 1];
+        if (esc === undefined) break; // escape split across fragments — wait
+        if (esc === "u") {
+          if (pos + 6 > raw.length) break; // incomplete \uXXXX — wait
+          out += String.fromCharCode(parseInt(raw.slice(pos + 2, pos + 6), 16));
+          pos += 6;
+        } else {
+          out += ESCAPES[esc] !== undefined ? ESCAPES[esc] : esc;
+          pos += 2;
+        }
+      } else {
+        out += ch;
+        pos += 1;
+      }
+    }
+    return out;
+  };
+}
+
 function validateBody(body) {
   if (!body || typeof body !== "object") {
     return "Request body must be a JSON object.";
@@ -114,8 +163,33 @@ app.post("/api/chat", async (req, res) => {
       ]
     : messages.map(({ role, content }) => ({ role, content }));
 
+  // Streamed NDJSON response: one JSON event per line.
+  //   {"type":"delta","text":"..."}  — incremental chunks of the reply
+  //   {"type":"done", ...}           — final authoritative payload
+  //   {"type":"error","error":"..."} — terminal mid-stream error
+  // Pre-stream failures (validation, missing key) above keep today's
+  // non-200 JSON responses since no headers have been sent yet.
+  const writeEvent = (event) => {
+    if (!res.headersSent) {
+      res.status(200);
+      res.setHeader("Content-Type", "application/x-ndjson");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("X-Accel-Buffering", "no");
+      res.flushHeaders();
+    }
+    res.write(JSON.stringify(event) + "\n");
+  };
+
+  const fail = (message) => {
+    if (res.headersSent) {
+      writeEvent({ type: "error", error: message });
+      return res.end();
+    }
+    return res.status(500).json({ error: message });
+  };
+
   try {
-    const response = await getClient().messages.create({
+    const stream = getClient().messages.stream({
       model: "claude-sonnet-5",
       max_tokens: 1024,
       system: buildSystemPrompt(languageName, topic),
@@ -124,34 +198,40 @@ app.post("/api/chat", async (req, res) => {
       messages: apiMessages,
     });
 
+    const extractReply = createReplyExtractor();
+    for await (const event of stream) {
+      if (event.type === "content_block_delta" && event.delta.type === "input_json_delta") {
+        const text = extractReply(event.delta.partial_json);
+        if (text) writeEvent({ type: "delta", text });
+      }
+    }
+
+    const response = await stream.finalMessage();
+
     const toolUse = response.content.find((block) => block.type === "tool_use");
     if (!toolUse) {
       console.error("No tool_use block in model response:", JSON.stringify(response.content));
-      return res.status(500).json({
-        error: "The language model request failed. Check the server logs.",
-      });
+      return fail("The language model request failed. Check the server logs.");
     }
 
     const { reply, correction, correctionNote } = toolUse.input;
     if (typeof reply !== "string" || reply.length === 0) {
       console.error("Model response missing reply:", JSON.stringify(toolUse.input));
-      return res.status(500).json({
-        error: "The language model request failed. Check the server logs.",
-      });
+      return fail("The language model request failed. Check the server logs.");
     }
-    return res.json({
+    writeEvent({
+      type: "done",
       reply,
       correction: isOpener ? null : correction ?? null,
       correctionNote: isOpener ? null : correctionNote ?? null,
     });
+    return res.end();
   } catch (err) {
     console.error("Anthropic API error:", err);
     if (err instanceof Anthropic.AuthenticationError) {
-      return res.status(500).json({ error: "Invalid Anthropic API key. Check .env." });
+      return fail("Invalid Anthropic API key. Check .env.");
     }
-    return res.status(500).json({
-      error: "The language model request failed. Check the server logs.",
-    });
+    return fail("The language model request failed. Check the server logs.");
   }
 });
 

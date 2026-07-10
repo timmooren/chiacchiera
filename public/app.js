@@ -294,7 +294,14 @@ errorDismiss.addEventListener("click", hideError);
 
 /* ---------- API ---------- */
 
-async function requestReply() {
+/**
+ * POSTs to /api/chat and reads the streamed NDJSON response.
+ * `onDelta(text)` is called for each incremental reply chunk; if it returns
+ * false (stale session), reading is aborted via reader.cancel() and null is
+ * returned. Resolves with the final `done` payload {reply, correction,
+ * correctionNote}. Non-OK or plain-JSON responses keep today's error path.
+ */
+async function requestReply(onDelta) {
   const response = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -305,18 +312,75 @@ async function requestReply() {
     }),
   });
 
-  let data = null;
-  try {
-    data = await response.json();
-  } catch (_) {
-    data = null;
+  const contentType = response.headers.get("content-type") || "";
+  if (!response.ok || contentType.includes("application/json")) {
+    let data = null;
+    try {
+      data = await response.json();
+    } catch (_) {
+      data = null;
+    }
+    if (!response.ok) {
+      const message = data && data.error ? data.error : "Could not reach the server.";
+      throw new Error(message);
+    }
+    return data;
   }
 
-  if (!response.ok) {
-    const message = data && data.error ? data.error : "Could not reach the server.";
-    throw new Error(message);
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let done = null;
+
+  const handleLine = (line) => {
+    const trimmed = line.trim();
+    if (!trimmed) return true;
+    let event = null;
+    try {
+      event = JSON.parse(trimmed);
+    } catch (_) {
+      return true;
+    }
+    if (event.type === "delta") {
+      if (typeof event.text === "string" && onDelta(event.text) === false) {
+        return false; // stale session — stop reading
+      }
+    } else if (event.type === "done") {
+      done = event;
+    } else if (event.type === "error") {
+      throw new Error(event.error || "The language model request failed. Check the server logs.");
+    }
+    return true;
+  };
+
+  try {
+    for (;;) {
+      const { value, done: readerDone } = await reader.read();
+      buffer += readerDone ? decoder.decode() : decoder.decode(value, { stream: true });
+      let newlineIndex;
+      while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
+        const line = buffer.slice(0, newlineIndex);
+        buffer = buffer.slice(newlineIndex + 1);
+        if (!handleLine(line)) return null; // stale — abort via cancel in finally
+      }
+      if (readerDone) {
+        if (buffer && !handleLine(buffer)) return null; // partial trailing line
+        break;
+      }
+      if (done) break;
+    }
+  } finally {
+    try {
+      await reader.cancel();
+    } catch (_) {
+      /* ignore */
+    }
   }
-  return data;
+
+  if (!done) {
+    throw new Error("Could not reach the server.");
+  }
+  return done;
 }
 
 function setBusy(busy) {
@@ -327,21 +391,53 @@ function setBusy(busy) {
 
 /* ---------- Conversation flow ---------- */
 
+function createStreamTarget(session, typing) {
+  let bubble = null;
+  let textEl = null;
+  return {
+    onDelta(text) {
+      if (session !== state.session) return false; // stale — abort the stream
+      if (!bubble) {
+        typing.remove();
+        bubble = appendBubble("assistant", "");
+        textEl = bubble.querySelector(".bubble-text");
+      }
+      textEl.textContent += text;
+      scrollToBottom();
+      return true;
+    },
+    finish(reply) {
+      if (!bubble) {
+        bubble = appendBubble("assistant", reply);
+      } else {
+        // Replace with the authoritative reply in case deltas missed anything.
+        textEl.textContent = reply;
+      }
+    },
+    removePartial() {
+      if (bubble) bubble.remove();
+    },
+  };
+}
+
 async function openConversation() {
   const session = state.session;
   setBusy(true);
   const typing = showTypingIndicator();
+  const target = createStreamTarget(session, typing);
   try {
-    const data = await requestReply();
-    if (session !== state.session) return;
+    const data = await requestReply(target.onDelta);
+    if (session !== state.session || data === null) return;
     typing.remove();
-    appendBubble("assistant", data.reply);
+    target.finish(data.reply);
     state.messages.push({ role: "assistant", content: data.reply });
     state.transcript.push({ role: "assistant", content: data.reply });
     saveSession();
+    scrollToBottom();
   } catch (err) {
     if (session !== state.session) return;
     typing.remove();
+    target.removePartial();
     showError(err instanceof TypeError ? "Could not reach the server." : err.message);
   } finally {
     if (session === state.session) {
@@ -361,14 +457,15 @@ async function sendMessage(text) {
   setBusy(true);
   const typing = showTypingIndicator();
 
+  const target = createStreamTarget(session, typing);
   try {
-    const data = await requestReply();
-    if (session !== state.session) return;
+    const data = await requestReply(target.onDelta);
+    if (session !== state.session || data === null) return;
     typing.remove();
     if (data.correction) {
       appendCorrection(userBubble, text, data.correction, data.correctionNote);
     }
-    appendBubble("assistant", data.reply);
+    target.finish(data.reply);
     state.messages.push({ role: "assistant", content: data.reply });
     state.transcript.push({
       role: "user",
@@ -382,6 +479,7 @@ async function sendMessage(text) {
   } catch (err) {
     if (session !== state.session) return;
     typing.remove();
+    target.removePartial();
     userBubble.remove();
     state.messages.pop();
     chatInput.value = text;
