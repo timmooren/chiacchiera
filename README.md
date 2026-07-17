@@ -11,7 +11,7 @@ Pick a language, a mode, and a topic, and start talking. Chat freely, or step in
 - **Two languages** — Italian and Spanish, selectable per conversation.
 - **Two modes** — *Just chat* (free conversation) or *Roleplay* (the assistant invents a concrete scene within your topic and stays in character).
 - **Scene cards** — a roleplay's stage direction renders as a centered "La scena" card above the dialogue instead of inside a chat bubble; scene twists mid-conversation get cards too.
-- **Topic-based conversations** — 8 starter topics (travel, food, daily life, work, hobbies, movies & music, family, sports). The conversation starts the moment you've picked language, mode, and topic.
+- **Topic-based conversations** — 10 starter topics (travel, food, daily life, work, hobbies, movies & music, family, sports, romance, games). The conversation starts the moment you've picked language, mode, and topic.
 - **Corrections with word-level diffs** — your message is compared against the corrected version and only the words that actually changed are underlined. Pure capitalization or punctuation fixes are ignored, and full translations of English sentences skip underlining entirely.
 - **Explanations in English** — each correction comes with a one-line grammar note.
 - **Streaming replies** — assistant responses render token-by-token.

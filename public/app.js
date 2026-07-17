@@ -14,6 +14,8 @@ const TOPICS = [
   { id: "Movies & Music", emoji: "🎬", en: "Movies & Music", italian: "Film e musica", spanish: "Cine y música" },
   { id: "Family & Friends", emoji: "👨‍👩‍👧", en: "Family & Friends", italian: "Famiglia e amici", spanish: "Familia y amigos" },
   { id: "Sports", emoji: "⚽", en: "Sports", italian: "Sport", spanish: "Deportes" },
+  { id: "Romance", emoji: "💘", en: "Romance", italian: "Amore", spanish: "Amor" },
+  { id: "Games", emoji: "🎮", en: "Games", italian: "Giochi", spanish: "Juegos" },
 ];
 
 const state = {
