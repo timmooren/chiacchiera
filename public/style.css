@@ -1,16 +1,54 @@
+/* Chiacchiera — "Al tavolino": a chat at a sidewalk-café table.
+   Light = trattoria at noon (crema and warm stucco), dark = evening enoteca.
+   Palette: Italian red canvas, espresso ink, Spanish-sun yellow accents.
+   Signature element: the scalloped striped awning along the top edge. */
+
 :root {
   color-scheme: light dark;
-  --ceramic: #F7F9F7;
-  --cobalt: #1F4FA3;
-  --cobalt-deep: #163A7A;
-  --lemon: #F2C641;
-  --ink: #1B2432;
-  --basil: #3E7C4F;
-  --cobalt-wash: rgba(31, 79, 163, 0.08);
-  --cobalt-border: rgba(31, 79, 163, 0.28);
-  --muted: #5C6674;
+
+  /* palette */
+  --rosso: #B0342A;
+  --rosso-deep: #872418;
+  --rosso-wash: rgba(176, 52, 42, 0.08);
+  --rosso-border: rgba(176, 52, 42, 0.28);
+  --sole: #F1BF00;
+  --sole-wash: rgba(241, 191, 0, 0.16);
+  --basil: #35714A;
+  --ink: #372A22;
+  --muted: #77675A;
+  --card: #FFFDF8;
+
+  /* scene */
+  --scene: radial-gradient(52rem 30rem at 12% -6%, rgba(241, 191, 0, 0.16), transparent 68%),
+    linear-gradient(175deg, #F9F2E7 0%, #F4E8D4 58%, #EFDFC4 100%);
+
+  /* awning stripes */
+  --awn-a: #B0342A;
+  --awn-b: #F6F1E4;
+
+  /* teacher's note paper */
+  --paper: #FFF9E9;
+  --paper-note: #6E6353;
+
+  /* bubbles */
+  --bubble-user: linear-gradient(170deg, #C04434, #A52D22);
+  --bubble-user-ink: #FFFFFF;
+
+  /* layered, coffee-tinted shadows (one light source, top-left) */
+  --shadow-sm: 0 1px 2px rgba(97, 48, 28, 0.10), 0 2px 6px rgba(97, 48, 28, 0.07);
+  --shadow-md: 0 1px 2px rgba(97, 48, 28, 0.08), 0 4px 10px rgba(97, 48, 28, 0.08),
+    0 14px 28px rgba(97, 48, 28, 0.09);
+  --shadow-lift: 0 2px 4px rgba(97, 48, 28, 0.10), 0 8px 16px rgba(97, 48, 28, 0.10),
+    0 20px 36px rgba(97, 48, 28, 0.10);
+
+  --radius-lg: 20px;
+  --radius-md: 14px;
+  --radius-sm: 10px;
+
   --font-display: "Fraunces", Georgia, serif;
   --font-body: "Karla", system-ui, -apple-system, sans-serif;
+
+  --focus-ring: var(--rosso);
 }
 
 * {
@@ -25,11 +63,23 @@ body {
 }
 
 body {
-  background: var(--ceramic);
+  background: var(--scene);
+  background-attachment: fixed;
   color: var(--ink);
   font-family: var(--font-body);
   font-size: 1rem;
-  line-height: 1.5;
+  line-height: 1.55;
+}
+
+/* a whisper of grain so the scene doesn't read as flat digital gradient */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  pointer-events: none;
+  opacity: 0.045;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 .visually-hidden {
@@ -52,148 +102,498 @@ button {
 }
 
 :focus-visible {
-  outline: 3px solid var(--cobalt);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 6px;
+}
+
+.screen[hidden] {
+  display: none !important;
+}
+
+/* ---------- Awning (signature) ---------- */
+
+.awning {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  /* 60px of awning + 20px of room for the cast shadow (overflow clips it
+     otherwise); the strip is pointer-events: none so the extra height
+     never blocks clicks */
+  height: 88px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* the canopy: tilted back in real perspective, so the stripes converge
+   toward the wall it hangs from. Side extension is an exact multiple of
+   the 88px stripe period so the (unscaled) bottom edge stays in phase
+   with the valance scallops below. */
+.awning::before {
+  content: "";
+  position: absolute;
+  /* oversized and shifted up: rotateX foreshortens the plane, so the tilted
+     top edge would otherwise land ~12px below the page top. 60px tall with
+     the bottom pinned at 38px puts the far edge just past y=0; overflow
+     clips the rest. Side overhang = 4 × 88px stripe period (phase-safe),
+     enough for the top edge's perspective shrink up to ~4.5K viewports. */
+  top: -22px;
+  left: -352px;
+  right: -352px;
+  height: 60px;
+  background:
+    linear-gradient(rgba(58, 26, 14, 0.26), rgba(255, 255, 255, 0.10) 78%),
+    repeating-linear-gradient(90deg, var(--awn-a) 0 44px, var(--awn-b) 44px 88px);
+  transform: perspective(260px) rotateX(42deg);
+  transform-origin: bottom center;
+  animation: unroll 700ms 80ms cubic-bezier(0.25, 0.8, 0.35, 1) both;
+}
+
+/* the scalloped valance, hanging straight down from the canopy's front
+   edge — each 44px scallop sits exactly under its 44px stripe */
+.awning::after {
+  content: "";
+  position: absolute;
+  top: 38px;
+  left: 0;
+  right: 0;
+  height: 22px;
+  background-image:
+    radial-gradient(circle at 22px 0, var(--awn-a) 0 21.8px, transparent 22.3px),
+    radial-gradient(circle at 66px 0, var(--awn-b) 0 21.8px, transparent 22.3px);
+  background-size: 88px 22px;
+  background-repeat: repeat-x;
+  /* layered shade hugging the scallop curves: contact + two soft passes
+     at small offsets so the shadow follows the roundings without
+     reading as a detached second fringe */
+  filter: drop-shadow(0 2px 2px rgba(74, 34, 18, 0.20))
+    drop-shadow(0 4px 5px rgba(74, 34, 18, 0.15))
+    drop-shadow(0 8px 9px rgba(74, 34, 18, 0.10));
+  animation: valance-drop 360ms 480ms ease-out both;
 }
 
 /* ---------- Start screen ---------- */
 
 .screen-start {
-  max-width: 640px;
+  position: relative;
+  overflow-x: hidden;
+  /* clear the fixed awning */
+  padding-top: 60px;
+}
+
+.start-inner {
+  position: relative;
+  z-index: 1;
+  max-width: 680px;
   margin: 0 auto;
-  padding: 3rem 1.25rem 4rem;
+  padding: 3.4rem 1.25rem 3.5rem;
+}
+
+/* café life drifting at the edges of the terrace */
+.floaters {
+  animation: fade-only 900ms 1150ms ease-out both;
+}
+
+.floater {
+  position: absolute;
+  z-index: 0;
+  opacity: 0.55;
+  pointer-events: none;
+  user-select: none;
+  animation: float var(--dur, 7s) var(--del, 0s) ease-in-out infinite alternate;
+}
+
+.f1 { left: 4%;  top: 15%; font-size: 2rem;   --dur: 6.5s; }
+.f2 { right: 5%; top: 19%; font-size: 1.8rem; --dur: 7.5s; --del: 0.6s; }
+.f3 { left: 7%;  top: 40%; font-size: 1.5rem; --dur: 8s;   --del: 1.2s; }
+.f4 { right: 8%; top: 46%; font-size: 2rem;   --dur: 7s;   --del: 0.3s; }
+.f5 { left: 5%;  top: 64%; font-size: 1.7rem; --dur: 8.5s; --del: 1.6s; }
+.f6 { right: 4%; top: 70%; font-size: 1.9rem; --dur: 6.8s; --del: 0.9s; }
+.f7 { left: 8%;  top: 86%; font-size: 2rem;   --dur: 7.8s; --del: 0.2s; }
+.f8 { right: 9%; top: 88%; font-size: 1.5rem; --dur: 7.2s; --del: 1.4s; }
+
+@keyframes float {
+  from {
+    transform: translateY(-7px) rotate(-5deg);
+  }
+  to {
+    transform: translateY(9px) rotate(5deg);
+  }
+}
+
+@keyframes fade-only {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .start-header {
+  position: relative;
   text-align: center;
-  margin-bottom: 2.5rem;
+  margin-bottom: 3rem;
 }
 
 .app-title {
   font-family: var(--font-display);
   font-optical-sizing: auto;
-  font-size: clamp(2.6rem, 8vw, 3.6rem);
-  font-weight: 600;
-  color: var(--cobalt);
-  margin: 0 0 0.4rem;
-  letter-spacing: -0.01em;
+  font-variation-settings: "SOFT" 80, "WONK" 1;
+  font-size: clamp(3rem, 9vw, 4.4rem);
+  font-weight: 560;
+  color: var(--rosso);
+  margin: 0 0 0.55rem;
+  letter-spacing: -0.015em;
+  text-shadow: 0 2px 0 rgba(255, 255, 255, 0.55);
+  animation: rise 480ms 240ms ease-out both;
+}
+
+/* Spanish-sun brush stroke under the title */
+.app-title::after {
+  content: "";
+  display: block;
+  width: 5.5rem;
+  height: 6px;
+  margin: 0.6rem auto 0;
+  border-radius: 3px;
+  background: var(--sole);
+  transform: rotate(-1.2deg);
 }
 
 .tagline {
-  margin: 0;
+  margin: 0 auto;
+  max-width: 30rem;
   color: var(--muted);
-  font-size: 1.05rem;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-variation-settings: "SOFT" 60, "WONK" 0;
+  font-size: 1.18rem;
+  animation: rise 480ms 340ms ease-out both;
+}
+
+/* little voices drifting from other tables */
+.mini-bubble {
+  position: absolute;
+  top: 0.4rem;
+  padding: 0.5rem 0.85rem;
+  background: var(--card);
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-style: italic;
+  font-variation-settings: "SOFT" 60, "WONK" 0;
+  font-size: 0.95rem;
+  box-shadow: var(--shadow-sm);
+  animation: pop 360ms 850ms ease-out both;
+}
+
+.mini-bubble-left {
+  left: -3rem;
+  border-radius: 16px 16px 16px 4px;
+  transform: rotate(-3deg);
+}
+
+.mini-bubble-right {
+  right: -3rem;
+  top: 3.9rem;
+  border-radius: 16px 16px 4px 16px;
+  transform: rotate(2.5deg);
+  animation-delay: 1000ms;
 }
 
 .picker {
-  margin-bottom: 2.25rem;
+  margin-bottom: 2.4rem;
+}
+
+.picker-language {
+  animation: rise 480ms 440ms ease-out both;
+}
+
+.picker-mode {
+  animation: rise 480ms 540ms ease-out both;
+}
+
+.picker-topic {
+  animation: rise 480ms 640ms ease-out both;
 }
 
 .picker-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
   font-family: var(--font-display);
   font-optical-sizing: auto;
-  font-size: 1.2rem;
+  font-variation-settings: "SOFT" 60, "WONK" 0;
+  font-size: 1.3rem;
   font-weight: 600;
-  margin: 0 0 0.9rem;
+  margin: 0 0 1rem;
+}
+
+.step-chip {
+  display: inline-grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: var(--sole);
+  color: var(--rosso-deep);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 700;
+  box-shadow: inset 0 -2px 0 rgba(120, 88, 0, 0.18);
 }
 
 .language-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1rem;
+  gap: 1.1rem;
 }
 
 .language-card {
+  position: relative;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.4rem;
-  padding: 1.4rem 1rem 1.2rem;
+  gap: 0.3rem;
+  padding: 1.7rem 1rem 1.35rem;
   min-height: 44px;
-  background: #fff;
-  border: 1px solid var(--cobalt-border);
-  border-top: 4px solid transparent;
-  border-radius: 14px;
-  border-top-left-radius: 6px;
-  border-top-right-radius: 6px;
-  /* restrained tile-pattern stripe along the top edge */
-  background-image: linear-gradient(#fff, #fff),
-    repeating-linear-gradient(
-      90deg,
-      var(--cobalt) 0 14px,
-      var(--lemon) 14px 20px,
-      var(--cobalt-deep) 20px 34px,
-      var(--lemon) 34px 40px
-    );
-  background-origin: padding-box, border-box;
-  background-clip: padding-box, border-box;
-  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+  background: var(--card);
+  border: none;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+/* selection sticker */
+.language-card::after {
+  content: "✓";
+  position: absolute;
+  top: 14px;
+  right: 12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--sole);
+  color: var(--rosso-deep);
+  display: grid;
+  place-items: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  opacity: 0;
+  transform: scale(0.5);
+  transition: opacity 160ms ease, transform 160ms ease;
 }
 
 .language-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(22, 58, 122, 0.14);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lift);
 }
 
 .language-card[aria-pressed="true"] {
-  border-color: var(--cobalt);
-  transform: translateY(-2px);
-  box-shadow: 0 0 0 2px var(--cobalt), 0 6px 16px rgba(22, 58, 122, 0.16), inset 0 -4px 0 var(--lemon);
+  transform: translateY(-3px);
+  box-shadow: 0 0 0 2.5px var(--rosso), var(--shadow-lift);
+}
+
+.language-card[aria-pressed="true"]::after {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .language-flag {
-  font-size: 2rem;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--sole-wash);
+  font-size: 2.1rem;
   line-height: 1;
+  margin-bottom: 0.35rem;
 }
 
 .language-name {
   font-family: var(--font-display);
   font-optical-sizing: auto;
-  font-size: 1.25rem;
+  font-variation-settings: "SOFT" 60, "WONK" 0;
+  font-size: 1.45rem;
   font-weight: 600;
+}
+
+.mode-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.1rem;
+}
+
+.mode-card {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 1.2rem 1rem 1.1rem;
+  min-height: 44px;
+  background: var(--card);
+  border: none;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.mode-card::after {
+  content: "✓";
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--sole);
+  color: var(--rosso-deep);
+  display: grid;
+  place-items: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  opacity: 0;
+  transform: scale(0.5);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.mode-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lift);
+}
+
+.mode-card[aria-pressed="true"] {
+  transform: translateY(-3px);
+  box-shadow: 0 0 0 2.5px var(--rosso), var(--shadow-lift);
+}
+
+.mode-card[aria-pressed="true"]::after {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.mode-emoji {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--sole-wash);
+  font-size: 1.5rem;
+  line-height: 1;
+  margin-bottom: 0.2rem;
+}
+
+.mode-name {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-variation-settings: "SOFT" 60, "WONK" 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.mode-desc {
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.3;
 }
 
 .topic-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 0.7rem;
+  gap: 0.8rem;
 }
 
 .topic-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.3rem;
+  gap: 0.45rem;
   min-height: 44px;
-  padding: 0.85rem 0.5rem;
-  background: #fff;
-  border: 1px solid var(--cobalt-border);
-  border-radius: 12px;
-  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+  padding: 1rem 0.5rem 0.85rem;
+  background: var(--card);
+  border: none;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.topic-card::after {
+  content: "✓";
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: var(--sole);
+  color: var(--rosso-deep);
+  display: grid;
+  place-items: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  opacity: 0;
+  transform: scale(0.5);
+  transition: opacity 160ms ease, transform 160ms ease;
 }
 
 .topic-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(22, 58, 122, 0.12);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
 }
 
 .topic-card[aria-pressed="true"] {
-  border-color: var(--cobalt);
-  box-shadow: inset 0 -4px 0 var(--lemon), 0 4px 12px rgba(22, 58, 122, 0.12);
-  transform: translateY(-2px);
+  transform: translateY(-3px);
+  box-shadow: 0 0 0 2.5px var(--rosso), var(--shadow-md);
+}
+
+.topic-card[aria-pressed="true"]::after {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .topic-emoji {
-  font-size: 1.4rem;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--sole-wash);
+  font-size: 1.35rem;
   line-height: 1;
 }
 
 .topic-label {
-  font-size: 0.85rem;
+  font-size: 0.87rem;
+  font-weight: 600;
   text-align: center;
   line-height: 1.25;
+}
+
+.reassure {
+  margin: 2.6rem auto 0;
+  max-width: 34rem;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.94rem;
+  animation: rise 480ms 740ms ease-out both;
+}
+
+.reassure em {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-variation-settings: "SOFT" 60, "WONK" 0;
+  color: var(--basil);
+  font-size: 1.02rem;
 }
 
 /* ---------- Chat screen ---------- */
@@ -202,23 +602,24 @@ button {
   display: flex;
   flex-direction: column;
   height: 100dvh;
-  max-width: 720px;
-  margin: 0 auto;
-}
-
-.screen-chat[hidden] {
-  display: none;
 }
 
 .chat-header {
+  flex: none;
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+  /* header clears the fixed awning itself, so its background runs up
+     behind the canopy — the awning reads as mounted on the bar, not
+     floating over the terrace gradient */
+  padding: calc(0.6rem + 60px) 1rem 0.6rem;
+}
+
+.chat-header-inner {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.7rem 1rem;
-  background: var(--cobalt);
-  color: #fff;
-  border-bottom-left-radius: 12px;
-  border-bottom-right-radius: 12px;
+  max-width: 760px;
+  margin: 0 auto;
 }
 
 .new-chat-button {
@@ -226,20 +627,18 @@ button {
   align-items: center;
   gap: 0.4rem;
   min-height: 44px;
-  padding: 0.4rem 0.8rem;
-  background: rgba(255, 255, 255, 0.14);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  border-radius: 10px;
+  padding: 0.4rem 0.95rem;
+  background: transparent;
+  color: var(--rosso);
+  border: 1.5px solid var(--rosso-border);
+  border-radius: 999px;
   font-weight: 700;
+  transition: background 160ms ease, border-color 160ms ease;
 }
 
 .new-chat-button:hover {
-  background: rgba(255, 255, 255, 0.24);
-}
-
-.new-chat-button:focus-visible {
-  outline-color: var(--lemon);
+  background: var(--rosso-wash);
+  border-color: var(--rosso);
 }
 
 .chat-context {
@@ -248,13 +647,32 @@ button {
   gap: 0.5rem;
   font-family: var(--font-display);
   font-optical-sizing: auto;
-  font-size: 1.15rem;
+  font-variation-settings: "SOFT" 60, "WONK" 0;
+  font-size: 1.2rem;
   font-weight: 600;
 }
 
 .chat-flag {
-  font-size: 1.3rem;
+  font-size: 1.35rem;
   line-height: 1;
+}
+
+.chat-mode {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.35rem;
+  padding: 0.22rem 0.65rem;
+  background: var(--sole-wash);
+  border-radius: 999px;
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+
+.chat-mode[hidden] {
+  display: none;
 }
 
 .chat-log {
@@ -262,28 +680,31 @@ button {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  padding: 1.25rem 1rem;
+  gap: 0.85rem;
+  padding: 1.5rem max(1rem, calc((100% - 760px) / 2)) 1.25rem;
 }
 
 .bubble {
-  max-width: 82%;
-  padding: 0.7rem 1rem;
-  border-radius: 18px;
-  animation: bubble-in 160ms ease-out;
+  max-width: 75%;
+  padding: 0.8rem 1.05rem;
+  border-radius: var(--radius-lg);
+  font-size: 1.02rem;
+  animation: bubble-in 200ms ease-out;
 }
 
 .bubble-assistant {
   align-self: flex-start;
-  background: var(--cobalt-wash);
-  border-bottom-left-radius: 4px;
+  background: var(--card);
+  border-bottom-left-radius: 6px;
+  box-shadow: var(--shadow-sm);
 }
 
 .bubble-user {
   align-self: flex-end;
-  background: #fff;
-  border: 1px solid var(--cobalt-border);
-  border-bottom-right-radius: 4px;
+  background: var(--bubble-user);
+  color: var(--bubble-user-ink);
+  border-bottom-right-radius: 6px;
+  box-shadow: 0 2px 5px rgba(90, 36, 20, 0.24), 0 6px 14px rgba(90, 36, 20, 0.16);
 }
 
 .bubble-text {
@@ -291,23 +712,102 @@ button {
   overflow-wrap: break-word;
 }
 
-@keyframes bubble-in {
+/* each streamed word fades in as it arrives */
+.bubble-text .word {
+  display: inline-block;
+  animation: word-fade 260ms ease both;
+}
+
+@keyframes word-fade {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(0.25em);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
 }
 
-/* Signature: teacher's green-ink margin note */
+@keyframes bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Scene card — the roleplay's stage direction, set like a playbill caption
+   between the bubbles rather than spoken by a character */
+
+.scene-card {
+  align-self: center;
+  max-width: min(80%, 30rem);
+  padding: 0.75rem 1.3rem 0.85rem;
+  background: var(--paper);
+  border: 1px solid var(--rosso-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  text-align: center;
+  animation: bubble-in 200ms ease-out;
+}
+
+.scene-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--rosso);
+  margin-bottom: 0.3rem;
+}
+
+.scene-label::before,
+.scene-label::after {
+  content: "";
+  width: 1.4rem;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--sole);
+}
+
+.scene-text {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 1.02rem;
+  color: var(--ink);
+  overflow-wrap: break-word;
+}
+
+.scene-pin {
+  font-style: normal;
+  margin-right: 0.45rem;
+}
+
+/* Signature detail: the teacher's note — warm paper, green ink,
+   clipped to your own message like a margin note on homework */
 
 .correction {
-  margin-top: 0.6rem;
-  padding-top: 0.55rem;
-  border-top: 2px dashed rgba(62, 124, 79, 0.55);
+  margin-top: 0.7rem;
+  padding: 0.6rem 0.8rem 0.65rem;
+  background: var(--paper);
+  border-radius: calc(var(--radius-lg) - 0.55rem);
+  color: var(--ink);
+}
+
+.correction-label {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--basil);
+  margin-bottom: 0.25rem;
 }
 
 .correction-text {
@@ -325,9 +825,9 @@ button {
 }
 
 .correction-note {
-  margin-top: 0.2rem;
-  font-size: 0.82rem;
-  color: var(--muted);
+  margin-top: 0.25rem;
+  font-size: 0.83rem;
+  color: var(--paper-note);
 }
 
 /* Typing indicator */
@@ -343,7 +843,7 @@ button {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--cobalt);
+  background: var(--rosso);
   opacity: 0.4;
   animation: typing-bounce 1.1s infinite ease-in-out;
 }
@@ -370,11 +870,13 @@ button {
 /* Input area */
 
 .input-area {
-  position: sticky;
-  bottom: 0;
-  padding: 0.6rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
-  background: var(--ceramic);
-  border-top: 1px solid rgba(31, 79, 163, 0.15);
+  flex: none;
+  padding: 0.5rem 1rem calc(0.9rem + env(safe-area-inset-bottom));
+}
+
+.input-inner {
+  max-width: 760px;
+  margin: 0 auto;
 }
 
 .error-notice[hidden] {
@@ -387,12 +889,13 @@ button {
   justify-content: space-between;
   gap: 0.6rem;
   margin-bottom: 0.6rem;
-  padding: 0.6rem 0.8rem;
-  background: #FBEFEA;
-  border: 1px solid #D07B5C;
-  border-radius: 10px;
-  color: #7A3B22;
+  padding: 0.65rem 0.85rem;
+  background: #FBEFE8;
+  border: 1px solid #D08A6C;
+  border-radius: var(--radius-md);
+  color: #74391F;
   font-size: 0.92rem;
+  box-shadow: var(--shadow-sm);
 }
 
 .error-dismiss {
@@ -407,33 +910,45 @@ button {
 }
 
 .error-dismiss:hover {
-  background: rgba(122, 59, 34, 0.1);
+  background: rgba(116, 57, 31, 0.1);
 }
 
 .chat-form {
   display: flex;
   align-items: flex-end;
-  gap: 0.6rem;
+  gap: 0.55rem;
+  padding: 0.4rem 0.4rem 0.4rem 1.1rem;
+  background: var(--card);
+  border-radius: 26px;
+  box-shadow: var(--shadow-md);
+  transition: box-shadow 160ms ease;
+}
+
+.chat-form:focus-within {
+  box-shadow: 0 0 0 2.5px var(--rosso), var(--shadow-md);
 }
 
 .chat-input {
   flex: 1;
   resize: none;
-  min-height: 44px;
+  min-height: 40px;
   max-height: 7.5rem;
-  padding: 0.65rem 0.9rem;
+  padding: 0.55rem 0;
   font-family: inherit;
   font-size: 1rem;
   line-height: 1.4;
   color: var(--ink);
-  background: #fff;
-  border: 1px solid var(--cobalt-border);
-  border-radius: 12px;
+  background: transparent;
+  border: none;
 }
 
 .chat-input:focus-visible {
-  outline: 3px solid var(--cobalt);
-  outline-offset: 1px;
+  outline: none;
+}
+
+.chat-input::placeholder {
+  color: var(--muted);
+  opacity: 0.75;
 }
 
 .chat-input:disabled {
@@ -444,48 +959,116 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 46px;
+  height: 46px;
   flex-shrink: 0;
-  background: var(--cobalt);
+  background: var(--rosso);
   color: #fff;
   border: none;
-  border-radius: 12px;
-  transition: background 160ms ease;
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgba(90, 36, 20, 0.28);
+  transition: background 160ms ease, transform 160ms ease;
 }
 
 .send-button:hover:not(:disabled) {
-  background: var(--cobalt-deep);
+  background: var(--rosso-deep);
+  transform: translateY(-1px);
 }
 
 .send-button:disabled {
-  background: rgba(31, 79, 163, 0.35);
+  background: color-mix(in srgb, var(--rosso) 40%, transparent);
+  box-shadow: none;
   cursor: not-allowed;
 }
 
+/* ---------- Entrance choreography ---------- */
+
+/* the awning unrolls when the café opens: canopy swings down from
+   edge-on with a small overshoot, canvas settling into place */
+@keyframes unroll {
+  0% {
+    transform: perspective(260px) rotateX(88deg);
+  }
+  70% {
+    transform: perspective(260px) rotateX(38deg);
+  }
+  100% {
+    transform: perspective(260px) rotateX(42deg);
+  }
+}
+
+/* the valance drops in as the canopy lands */
+@keyframes valance-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.7) rotate(-3deg);
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 /* ---------- Responsive ---------- */
+
+@media (max-width: 950px) {
+  .floaters {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .mini-bubble {
+    display: none;
+  }
+}
 
 @media (max-width: 560px) {
   .topic-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .screen-start {
-    padding-top: 2rem;
+  .start-inner {
+    padding-top: 2.4rem;
+  }
+
+  .bubble {
+    max-width: 84%;
   }
 }
 
 @media (max-width: 380px) {
   .language-card {
-    padding: 1.1rem 0.6rem 1rem;
+    padding: 1.2rem 0.6rem 1.1rem;
   }
 
   .language-name {
-    font-size: 1.1rem;
+    font-size: 1.2rem;
   }
 
   .topic-card {
-    padding: 0.7rem 0.4rem;
+    padding: 0.8rem 0.4rem 0.7rem;
   }
 
   .topic-label {
@@ -493,93 +1076,172 @@ button {
   }
 }
 
-/* ---------- Dark mode: evening piazza ---------- */
+/* ---------- Dark mode: evening enoteca ---------- */
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --ceramic: #131A2A;
-    --cobalt: #6E96E8;
-    --cobalt-deep: #2B4A8F;
-    --ink: #E8EBF2;
-    --basil: #7FBF8E;
-    --cobalt-wash: rgba(110, 150, 232, 0.14);
-    --cobalt-border: rgba(110, 150, 232, 0.4);
-    --muted: #9AA3B5;
+    --rosso: #E08A72;
+    --rosso-deep: #F0B9A5;
+    --rosso-wash: rgba(224, 138, 114, 0.13);
+    --rosso-border: rgba(224, 138, 114, 0.38);
+    --sole: #E7BB2E;
+    --sole-wash: rgba(231, 187, 46, 0.13);
+    --basil: #93C8A2;
+    --ink: #F0E8DE;
+    --muted: #B5A290;
+    --card: #2A1F19;
+
+    /* espresso-dark night with the warm haze of café lights */
+    --scene: radial-gradient(46rem 26rem at 14% -6%, rgba(217, 160, 91, 0.09), transparent 66%),
+      radial-gradient(40rem 24rem at 88% -4%, rgba(217, 160, 91, 0.06), transparent 64%),
+      linear-gradient(175deg, #16100B 0%, #1D1410 55%, #241A12 100%);
+
+    --awn-a: #9E2F23;
+    --awn-b: #948A78;
+
+    --paper: #31281A;
+    --paper-note: #BCAD97;
+
+    --bubble-user: linear-gradient(170deg, #A03828, #86281B);
+    --bubble-user-ink: #FBEFE8;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25);
+    --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 10px rgba(0, 0, 0, 0.3),
+      0 14px 28px rgba(0, 0, 0, 0.32);
+    --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.35), 0 8px 16px rgba(0, 0, 0, 0.35),
+      0 20px 36px rgba(0, 0, 0, 0.35);
+
+    --focus-ring: #EBAE94;
   }
 
-  .language-card {
-    background: #1C2438;
-    background-image: linear-gradient(#1C2438, #1C2438),
-      repeating-linear-gradient(
-        90deg,
-        var(--cobalt) 0 14px,
-        var(--lemon) 14px 20px,
-        var(--cobalt-deep) 20px 34px,
-        var(--lemon) 34px 40px
-      );
-    background-origin: padding-box, border-box;
-    background-clip: padding-box, border-box;
+  body::after {
+    opacity: 0.06;
   }
 
-  .language-card:hover {
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+  .floater {
+    opacity: 0.42;
+    filter: saturate(0.9) brightness(0.92);
   }
 
-  .language-card[aria-pressed="true"] {
-    box-shadow: 0 0 0 2px var(--cobalt), 0 6px 16px rgba(0, 0, 0, 0.5), inset 0 -4px 0 var(--lemon);
+  .app-title {
+    text-shadow: 0 2px 12px rgba(217, 160, 91, 0.14);
   }
 
-  .topic-card {
-    background: #1C2438;
+  .step-chip {
+    box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.28);
   }
 
-  .topic-card:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  .step-chip,
+  .language-card::after,
+  .mode-card::after,
+  .topic-card::after {
+    color: #2B1A10;
   }
 
-  .topic-card[aria-pressed="true"] {
-    box-shadow: inset 0 -4px 0 var(--lemon), 0 4px 12px rgba(0, 0, 0, 0.4);
+  .awning::after {
+    filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.42))
+      drop-shadow(0 4px 5px rgba(0, 0, 0, 0.3))
+      drop-shadow(0 8px 9px rgba(0, 0, 0, 0.22));
   }
 
+  /* night: the header's card + drop shadow read as a straight band cutting
+     across the curved scallops. Let it dissolve into the room so only the
+     awning's own scalloped shade lands on the chat body. */
   .chat-header {
-    background: var(--cobalt-deep);
+    background: transparent;
+    box-shadow: none;
+  }
+
+  /* night: canopy in deeper shadow, but the canvas stripes stay legible */
+  .awning::before {
+    background:
+      linear-gradient(rgba(12, 5, 2, 0.44), rgba(255, 255, 255, 0.04) 78%),
+      repeating-linear-gradient(90deg, var(--awn-a) 0 44px, var(--awn-b) 44px 88px);
   }
 
   .bubble-user {
-    background: #1C2438;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.35), 0 6px 14px rgba(0, 0, 0, 0.28);
   }
 
-  .correction {
-    border-top-color: rgba(127, 191, 142, 0.55);
+  .send-button {
+    background: #A93A2B;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
   }
 
-  .input-area {
-    border-top-color: rgba(110, 150, 232, 0.22);
-  }
-
-  .error-notice {
-    background: #3A241C;
-    border-color: #B06A4E;
-    color: #F2C4AC;
-  }
-
-  .error-dismiss:hover {
-    background: rgba(242, 196, 172, 0.14);
-  }
-
-  .chat-input {
-    background: #1C2438;
+  .send-button:hover:not(:disabled) {
+    background: #BC4936;
   }
 
   .send-button:disabled {
-    background: rgba(110, 150, 232, 0.3);
+    background: rgba(224, 138, 114, 0.25);
+  }
+
+  .error-notice {
+    background: #392318;
+    border-color: #A96A4C;
+    color: #F0C6AE;
+    }
+
+  .error-dismiss:hover {
+    background: rgba(240, 198, 174, 0.14);
   }
 }
 
 /* ---------- Reduced motion ---------- */
 
+/* Reduced motion: no movement, but keep gentle opacity fade-ins —
+   vestibular-safe and the page still feels alive on open */
 @media (prefers-reduced-motion: reduce) {
-  .bubble {
+  .awning::before {
+    animation: fade-only 500ms ease-out both;
+  }
+
+  .awning::after {
+    animation: fade-only 500ms 250ms ease-out both;
+  }
+
+  .app-title {
+    animation: fade-only 450ms 200ms ease-out both;
+  }
+
+  .tagline {
+    animation: fade-only 450ms 320ms ease-out both;
+  }
+
+  .picker-language {
+    animation: fade-only 450ms 440ms ease-out both;
+  }
+
+  .picker-mode {
+    animation: fade-only 450ms 560ms ease-out both;
+  }
+
+  .picker-topic {
+    animation: fade-only 450ms 680ms ease-out both;
+  }
+
+  .reassure {
+    animation: fade-only 450ms 800ms ease-out both;
+  }
+
+  .mini-bubble {
+    animation: fade-only 450ms 900ms ease-out both;
+  }
+
+  .mini-bubble-right {
+    animation-delay: 1050ms;
+  }
+
+  .bubble,
+  .scene-card {
+    animation: fade-only 180ms ease-out;
+  }
+
+  .bubble-text .word {
+    animation: none;
+  }
+
+  .floater {
     animation: none;
   }
 
@@ -589,16 +1251,21 @@ button {
   }
 
   .language-card,
+  .mode-card,
   .topic-card,
   .send-button,
-  .new-chat-button {
+  .new-chat-button,
+  .chat-form {
     transition: none;
   }
 
   .language-card:hover,
+  .mode-card:hover,
   .topic-card:hover,
   .language-card[aria-pressed="true"],
-  .topic-card[aria-pressed="true"] {
+  .mode-card[aria-pressed="true"],
+  .topic-card[aria-pressed="true"],
+  .send-button:hover:not(:disabled) {
     transform: none;
   }
 }

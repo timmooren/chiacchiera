@@ -19,20 +19,20 @@ function getClient() {
   return anthropic;
 }
 
-const respondTool = {
-  name: "respond",
-  description: "Deliver your conversational reply and feedback on the learner's latest message.",
+// Correction is delivered via an (unforced) tool call AFTER the plain-text
+// reply. Keeping the reply as free text lets it stream token-by-token; forcing
+// a tool for the whole response made the API buffer and emit it in one burst.
+const correctionTool = {
+  name: "correction",
+  description:
+    "Give feedback on the learner's latest message. Call this once, right after your conversational reply, on every turn where the learner wrote something.",
   input_schema: {
     type: "object",
     properties: {
-      reply: {
-        type: "string",
-        description: "Your conversational response, written ONLY in the target language",
-      },
       correction: {
         type: ["string", "null"],
         description:
-          "The correct/natural way to say the user's latest message in the target language. If the user wrote English or mixed language, this is the target-language translation. If their target-language message had mistakes, this is the corrected version. null ONLY if the message was already correct and natural target-language.",
+          "The correct/natural way to say the user's latest message in the target language. If the user wrote English or mixed language, this is the target-language translation. If their target-language message had mistakes, this is the corrected version. null ONLY if the message was already correct and natural target-language. Treat trivial slips of accents/diacritics, capitalization, or punctuation as correct (e.g. \"si\" for \"sì\", \"esta\" for \"está\"): if those are the only differences, return null rather than a correction.",
       },
       correctionNote: {
         type: ["string", "null"],
@@ -40,82 +40,50 @@ const respondTool = {
           "One short sentence explaining the main fix or a useful nuance. ALWAYS write correctionNote in English, NEVER in the target language (Italian/Spanish) — it is a grammar explanation for an English-speaking learner. null if correction is null.",
       },
     },
-    required: ["reply", "correction", "correctionNote"],
+    required: ["correction", "correctionNote"],
   },
 };
 
-function buildSystemPrompt(languageName, topic) {
+function buildSystemPrompt(languageName, topic, mode) {
+  const sharedRules = `- Reply ONLY in ${languageName}, in a natural conversational register. Write your reply as plain text — do NOT put it in a tool call.
+- Keep replies to 1-3 sentences.
+- Match the learner's apparent level — use simpler language if they seem to struggle.
+- After your reply, call the "correction" tool exactly once to give feedback on the learner's latest message, filling correction and correctionNote exactly per their descriptions.
+- correctionNote MUST ALWAYS be written in English, never in ${languageName} — it is a grammar explanation for an English-speaking learner. Only your reply and the correction field are in ${languageName}.`;
+
+  if (mode === "roleplay") {
+    return `You are a friendly native ${languageName} speaker helping a learner practice through a roleplay scene related to ${topic}.
+
+Invent ONE concrete everyday scenario within that topic and surprise the learner — be specific and vary your choices (for Food & Cooking: ordering at a busy trattoria or haggling at a market stall; for Travel: checking into a small family-run hotel or asking a local for directions). You play one character in the scene (waiter, vendor, receptionist, fellow fan, ...); the learner plays themselves.
+
+Rules:
+- In your FIRST message, set the scene with one short parenthetical sentence in simple ${languageName} on its own line, then give your first in-character line.
+- Stay in character and keep the scene moving: react to the learner, then prompt their next move with a question or a choice.
+- If the scene reaches a natural end, wrap it up warmly and offer a twist or a fresh scene in the same topic — introduce it with another short parenthetical sentence on its own line.
+${sharedRules}`;
+  }
+
   return `You are a friendly native ${languageName} speaker helping a learner practice through casual conversation about ${topic}.
 
 Rules:
-- Reply ONLY in ${languageName}, in a natural conversational register.
-- Keep replies to 1-3 sentences.
 - Always keep the conversation going: react to what the learner said, then ask a follow-up question.
-- Match the learner's apparent level — use simpler language if they seem to struggle.
 - Stay loosely on the topic of ${topic}, but follow the learner's lead if they drift.
-- Fill in the "respond" tool's correction and correctionNote fields exactly per their descriptions, based on the learner's latest message.
-- correctionNote MUST ALWAYS be written in English, never in ${languageName} — it is a grammar explanation for an English-speaking learner. Only the reply and correction fields are in ${languageName}.`;
-}
-
-/**
- * Incrementally extracts the string value of the "reply" field from a stream
- * of partial JSON fragments (the tool input arrives as input_json_delta
- * events). Returns the NEW decoded text produced by each pushed fragment.
- * Handles JSON string escapes (\", \\, \n, \uXXXX, ...) that may be split
- * across fragments: incomplete escape sequences stay unconsumed until the
- * rest arrives. Stops emitting at the unescaped closing quote.
- */
-function createReplyExtractor() {
-  const ESCAPES = { '"': '"', "\\": "\\", "/": "/", n: "\n", r: "\r", t: "\t", b: "\b", f: "\f" };
-  let raw = "";
-  let pos = -1; // index into raw of the next undecoded char; -1 until value start found
-  let done = false;
-
-  return function push(fragment) {
-    if (done) return "";
-    raw += fragment;
-    if (pos === -1) {
-      const match = raw.match(/"reply"\s*:\s*"/);
-      if (!match) return "";
-      pos = match.index + match[0].length;
-    }
-    let out = "";
-    while (pos < raw.length) {
-      const ch = raw[pos];
-      if (ch === '"') {
-        done = true;
-        break;
-      }
-      if (ch === "\\") {
-        const esc = raw[pos + 1];
-        if (esc === undefined) break; // escape split across fragments — wait
-        if (esc === "u") {
-          if (pos + 6 > raw.length) break; // incomplete \uXXXX — wait
-          out += String.fromCharCode(parseInt(raw.slice(pos + 2, pos + 6), 16));
-          pos += 6;
-        } else {
-          out += ESCAPES[esc] !== undefined ? ESCAPES[esc] : esc;
-          pos += 2;
-        }
-      } else {
-        out += ch;
-        pos += 1;
-      }
-    }
-    return out;
-  };
+${sharedRules}`;
 }
 
 function validateBody(body) {
   if (!body || typeof body !== "object") {
     return "Request body must be a JSON object.";
   }
-  const { language, topic, messages } = body;
+  const { language, topic, messages, mode } = body;
   if (language !== "italian" && language !== "spanish") {
     return 'language must be "italian" or "spanish".';
   }
   if (typeof topic !== "string" || topic.trim() === "") {
     return "topic must be a non-empty string.";
+  }
+  if (mode !== undefined && mode !== "chat" && mode !== "roleplay") {
+    return 'mode must be "chat" or "roleplay".';
   }
   if (!Array.isArray(messages)) {
     return "messages must be an array.";
@@ -150,17 +118,17 @@ app.post("/api/chat", async (req, res) => {
   }
 
   const { language, topic, messages } = req.body;
+  const mode = req.body.mode === "roleplay" ? "roleplay" : "chat";
   const languageName = LANGUAGES[language];
   const isOpener = messages.length === 0;
 
+  const openerInstruction =
+    mode === "roleplay"
+      ? "Please start the roleplay: set the scene in one short parenthetical sentence, then give your first in-character line."
+      : "Please open the conversation with a warm greeting and an easy question about the topic.";
+
   const apiMessages = isOpener
-    ? [
-        {
-          role: "user",
-          content:
-            "Please open the conversation with a warm greeting and an easy question about the topic.",
-        },
-      ]
+    ? [{ role: "user", content: openerInstruction }]
     : messages.map(({ role, content }) => ({ role, content }));
 
   // Streamed NDJSON response: one JSON event per line.
@@ -175,7 +143,13 @@ app.post("/api/chat", async (req, res) => {
       res.setHeader("Content-Type", "application/x-ndjson");
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("X-Accel-Buffering", "no");
+      // Without this, Chrome buffers the first ~1-2KB to MIME-sniff the body
+      // before releasing bytes to fetch's ReadableStream — for a short reply
+      // that means the whole stream lands in one burst, killing word-by-word.
+      res.setHeader("X-Content-Type-Options", "nosniff");
       res.flushHeaders();
+      // send each small delta packet immediately instead of coalescing (Nagle)
+      res.socket?.setNoDelay(true);
     }
     res.write(JSON.stringify(event) + "\n");
   };
@@ -192,38 +166,42 @@ app.post("/api/chat", async (req, res) => {
     const stream = getClient().messages.stream({
       model: "claude-sonnet-5",
       max_tokens: 1024,
-      system: buildSystemPrompt(languageName, topic),
-      tools: [respondTool],
-      tool_choice: { type: "tool", name: "respond" },
+      system: buildSystemPrompt(languageName, topic, mode),
+      tools: [correctionTool],
       messages: apiMessages,
     });
 
-    const extractReply = createReplyExtractor();
+    // The reply is the model's plain text; it streams token-by-token via
+    // text_delta. The correction rides along in a tool_use block we read from
+    // the final message.
     for await (const event of stream) {
-      if (event.type === "content_block_delta" && event.delta.type === "input_json_delta") {
-        const text = extractReply(event.delta.partial_json);
+      if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+        const text = event.delta.text;
         if (text) writeEvent({ type: "delta", text });
       }
     }
 
     const response = await stream.finalMessage();
 
-    const toolUse = response.content.find((block) => block.type === "tool_use");
-    if (!toolUse) {
-      console.error("No tool_use block in model response:", JSON.stringify(response.content));
+    const reply = response.content
+      .filter((block) => block.type === "text")
+      .map((block) => block.text)
+      .join("")
+      .trim();
+    if (reply.length === 0) {
+      console.error("Model response missing reply text:", JSON.stringify(response.content));
       return fail("The language model request failed. Check the server logs.");
     }
 
-    const { reply, correction, correctionNote } = toolUse.input;
-    if (typeof reply !== "string" || reply.length === 0) {
-      console.error("Model response missing reply:", JSON.stringify(toolUse.input));
-      return fail("The language model request failed. Check the server logs.");
-    }
+    const toolUse = response.content.find((block) => block.type === "tool_use");
+    const correction = toolUse?.input?.correction ?? null;
+    const correctionNote = toolUse?.input?.correctionNote ?? null;
+
     writeEvent({
       type: "done",
       reply,
-      correction: isOpener ? null : correction ?? null,
-      correctionNote: isOpener ? null : correctionNote ?? null,
+      correction: isOpener ? null : correction,
+      correctionNote: isOpener ? null : correctionNote,
     });
     return res.end();
   } catch (err) {

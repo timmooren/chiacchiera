@@ -2,14 +2,16 @@
 
 **Learn by chatting** — practice Italian or Spanish in a natural conversation with an LLM that gently corrects you as you go.
 
-Pick a language and a topic, and start talking. The assistant always replies in your target language and keeps the conversation flowing. Every message you send gets a *teacher's green-ink note* inside your own chat bubble: the correct, natural way to say what you meant — with the exact words that changed underlined. Write in English and the note becomes a translation instead.
+Pick a language, a mode, and a topic, and start talking. Chat freely, or step into a **roleplay** — the assistant invents a surprise scene (a job interview in Milan, a market stall haggle) and plays a character in it. The assistant always replies in your target language and keeps the conversation flowing. Every message you send gets a *teacher's green-ink note* inside your own chat bubble: the correct, natural way to say what you meant — with the exact words that changed underlined. Write in English and the note becomes a translation instead.
 
 ![Chat with corrections](docs/screenshots/chat-light.png)
 
 ## Features
 
 - **Two languages** — Italian and Spanish, selectable per conversation.
-- **Topic-based conversations** — 8 starter topics (travel, food, daily life, work, hobbies, movies & music, family, sports). The conversation starts the moment you've picked both a language and a topic.
+- **Two modes** — *Just chat* (free conversation) or *Roleplay* (the assistant invents a concrete scene within your topic and stays in character).
+- **Scene cards** — a roleplay's stage direction renders as a centered "La scena" card above the dialogue instead of inside a chat bubble; scene twists mid-conversation get cards too.
+- **Topic-based conversations** — 8 starter topics (travel, food, daily life, work, hobbies, movies & music, family, sports). The conversation starts the moment you've picked language, mode, and topic.
 - **Corrections with word-level diffs** — your message is compared against the corrected version and only the words that actually changed are underlined. Pure capitalization or punctuation fixes are ignored, and full translations of English sentences skip underlining entirely.
 - **Explanations in English** — each correction comes with a one-line grammar note.
 - **Streaming replies** — assistant responses render token-by-token.
@@ -19,9 +21,9 @@ Pick a language and a topic, and start talking. The assistant always replies in 
 
 ## Screenshots
 
-| Start screen | Dark mode |
-|---|---|
-| ![Start screen](docs/screenshots/start-light.png) | ![Dark mode chat](docs/screenshots/chat-dark.png) |
+| Start screen | Roleplay scene card | Dark mode |
+|---|---|---|
+| ![Start screen](docs/screenshots/start-light.png) | ![Roleplay with scene card](docs/screenshots/roleplay-light.png) | ![Dark mode chat](docs/screenshots/chat-dark.png) |
 
 ## Quick start
 
@@ -45,8 +47,9 @@ browser (public/)  ──POST /api/chat──▶  Express (server.js)  ──▶
 ```
 
 - The frontend is plain HTML/CSS/JS — no framework, no build step. Conversation history lives client-side and is sent in full with each request, so the server is stateless.
-- The server calls Claude with a **forced tool call** whose schema has three fields: `reply` (target language), `correction` (corrected/translated version of your message, `null` if it was already right), and `correctionNote` (short English explanation). Structured output without fragile JSON-from-prose parsing.
-- Responses stream back as NDJSON events: `delta` lines carry the reply as it's generated (decoded incrementally out of the tool call's partial JSON), and a final `done` line carries the authoritative payload including the correction.
+- The server calls Claude with a `correction` **tool**: the conversational reply streams back as plain text (so it renders token-by-token), then the model calls the tool once with `correction` (corrected/translated version of your message, `null` if it was already right) and `correctionNote` (short English explanation). Structured feedback without fragile JSON-from-prose parsing.
+- Responses stream back as NDJSON events: `delta` lines carry the reply text as it's generated, and a final `done` line carries the authoritative payload including the correction.
+- In roleplay mode the model opens with a parenthetical scene-setting line; the frontend splits it off and renders it as a scene card above the in-character bubble.
 - The word-diff underlines are computed client-side with a longest-common-subsequence over normalized tokens (lowercased, punctuation stripped).
 
 ### API
@@ -57,6 +60,7 @@ browser (public/)  ──POST /api/chat──▶  Express (server.js)  ──▶
 // request
 {
   "language": "italian",            // or "spanish"
+  "mode": "roleplay",                // or "chat" (default)
   "topic": "Travel",
   "messages": [                      // full history; [] asks the assistant to open
     { "role": "assistant", "content": "Ciao! ..." },
@@ -79,7 +83,7 @@ server.js            Express server + Anthropic streaming proxy
 public/
   index.html         both screens (start + chat)
   app.js             chat flow, streaming reader, word diff, localStorage
-  style.css          Mediterranean-ceramic theme, dark mode, animations
+  style.css          "Al tavolino" café theme (awning, scene cards), dark mode, animations
 docs/
   superpowers/specs/ original design document
   screenshots/

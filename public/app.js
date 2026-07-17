@@ -1,8 +1,8 @@
 "use strict";
 
 const LANGUAGES = {
-  italian: { flag: "🇮🇹", name: "Italiano" },
-  spanish: { flag: "🇪🇸", name: "Español" },
+  italian: { flag: "🇮🇹", name: "Italiano", sceneLabel: "La scena" },
+  spanish: { flag: "🇪🇸", name: "Español", sceneLabel: "La escena" },
 };
 
 const TOPICS = [
@@ -18,6 +18,7 @@ const TOPICS = [
 
 const state = {
   language: null,
+  mode: null,
   topic: null,
   messages: [],
   transcript: [],
@@ -33,6 +34,7 @@ function saveSession() {
   try {
     localStorage.setItem(SESSION_KEY, JSON.stringify({
       language: state.language,
+      mode: state.mode,
       topic: state.topic,
       transcript: state.transcript,
     }));
@@ -69,6 +71,8 @@ function loadSession() {
   const valid = saved
     && typeof saved === "object"
     && Object.prototype.hasOwnProperty.call(LANGUAGES, saved.language)
+    // sessions saved before modes existed have no mode — treated as "chat"
+    && (saved.mode === undefined || saved.mode === "chat" || saved.mode === "roleplay")
     && TOPICS.some((t) => t.id === saved.topic)
     && Array.isArray(saved.transcript)
     && saved.transcript.every((entry) => entry
@@ -89,6 +93,7 @@ const topicGrid = document.getElementById("topic-grid");
 const newChatButton = document.getElementById("new-chat-button");
 const chatFlag = document.getElementById("chat-flag");
 const chatTopic = document.getElementById("chat-topic");
+const chatMode = document.getElementById("chat-mode");
 const chatLog = document.getElementById("chat-log");
 const chatForm = document.getElementById("chat-form");
 const chatInput = document.getElementById("chat-input");
@@ -137,6 +142,9 @@ function updateStartScreen() {
   document.querySelectorAll(".language-card").forEach((card) => {
     card.setAttribute("aria-pressed", String(card.dataset.language === state.language));
   });
+  document.querySelectorAll(".mode-card").forEach((card) => {
+    card.setAttribute("aria-pressed", String(card.dataset.mode === state.mode));
+  });
   document.querySelectorAll(".topic-card").forEach((card) => {
     const topic = TOPICS.find((t) => t.id === card.dataset.topic);
     card.querySelector(".topic-label").textContent = topicLabel(topic);
@@ -145,7 +153,7 @@ function updateStartScreen() {
 }
 
 function maybeStartConversation() {
-  if (state.language && state.topic) showChatScreen();
+  if (state.language && state.mode && state.topic) showChatScreen();
 }
 
 document.querySelectorAll(".language-card").forEach((card) => {
@@ -156,9 +164,28 @@ document.querySelectorAll(".language-card").forEach((card) => {
   });
 });
 
+document.querySelectorAll(".mode-card").forEach((card) => {
+  card.addEventListener("click", () => {
+    state.mode = card.dataset.mode;
+    updateStartScreen();
+    maybeStartConversation();
+  });
+});
+
 /* ---------- Chat rendering ---------- */
 
-function scrollToBottom() {
+function isNearBottom() {
+  return chatLog.scrollHeight - chatLog.scrollTop - chatLog.clientHeight < 120;
+}
+
+/**
+ * Follows new content only when the reader is already at (or near) the bottom,
+ * so a streamed reply never drags them away from an earlier message they
+ * scrolled up to re-read. Pass force=true to jump regardless (own message,
+ * session restore).
+ */
+function scrollToBottom(force = false) {
+  if (!force && !isNearBottom()) return;
   chatLog.scrollTo({
     top: chatLog.scrollHeight,
     behavior: prefersReducedMotion.matches ? "auto" : "smooth",
@@ -176,8 +203,44 @@ function appendBubble(role, text) {
 
   bubble.appendChild(body);
   chatLog.appendChild(bubble);
-  scrollToBottom();
+  scrollToBottom(role === "user");
   return bubble;
+}
+
+/**
+ * Splits a leading parenthetical scene-setting sentence off an assistant
+ * message: "(Sei in un bar...) Buongiorno!" → { scene, rest }. Returns null
+ * when the message doesn't open with one, so callers fall back to a plain
+ * bubble and nothing is ever lost.
+ */
+function splitScene(text) {
+  const match = /^\s*\(([^)]+)\)\s*/.exec(text);
+  if (!match || !match[1].trim()) return null;
+  return { scene: match[1].trim(), rest: text.slice(match[0].length) };
+}
+
+function appendSceneCard(scene, beforeNode = null) {
+  const card = document.createElement("div");
+  card.className = "scene-card";
+  card.setAttribute("role", "note");
+
+  const label = document.createElement("span");
+  label.className = "scene-label";
+  label.textContent = LANGUAGES[state.language].sceneLabel;
+
+  const body = document.createElement("p");
+  body.className = "scene-text";
+  body.style.margin = "0";
+  const pin = document.createElement("span");
+  pin.className = "scene-pin";
+  pin.setAttribute("aria-hidden", "true");
+  pin.textContent = "📍";
+  body.append(pin, document.createTextNode(scene));
+
+  card.append(label, body);
+  chatLog.insertBefore(card, beforeNode);
+  scrollToBottom();
+  return card;
 }
 
 function normalizeToken(token) {
@@ -243,6 +306,11 @@ function appendCorrection(bubble, original, correction, note) {
   const block = document.createElement("div");
   block.className = "correction";
 
+  const label = document.createElement("span");
+  label.className = "correction-label";
+  label.textContent = "More natural";
+  block.appendChild(label);
+
   const text = document.createElement("p");
   text.className = "correction-text";
   text.style.margin = "0";
@@ -307,6 +375,7 @@ async function requestReply(onDelta) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       language: state.language,
+      mode: state.mode,
       topic: state.topic,
       messages: state.messages,
     }),
@@ -394,28 +463,87 @@ function setBusy(busy) {
 function createStreamTarget(session, typing) {
   let bubble = null;
   let textEl = null;
+  let buffer = ""; // received-but-not-yet-emitted tail (may hold a partial word)
+  let sceneEl = null;
+  // Replies may open with a parenthetical scene line (roleplay). Hold the
+  // stream until the opening "(" resolves either way, then render the scene
+  // as a card above the bubble instead of inside it.
+  let scenePending = true;
+
+  // Emit whole words from `buffer` as fade-in spans; keep the trailing partial
+  // word buffered until its whitespace boundary arrives (or the stream ends).
+  const emit = (final) => {
+    let cut = buffer.length;
+    if (!final) {
+      // hold everything after the last whitespace — it may be an unfinished word
+      cut = 0;
+      for (let i = buffer.length - 1; i >= 0; i--) {
+        if (/\s/.test(buffer[i])) {
+          cut = i + 1;
+          break;
+        }
+      }
+    }
+    const ready = buffer.slice(0, cut);
+    buffer = buffer.slice(cut);
+    for (const part of ready.match(/\s+|\S+/g) || []) {
+      if (/^\s/.test(part)) {
+        textEl.appendChild(document.createTextNode(part));
+      } else {
+        const span = document.createElement("span");
+        span.className = "word";
+        span.textContent = part;
+        textEl.appendChild(span);
+      }
+    }
+  };
+
   return {
     onDelta(text) {
       if (session !== state.session) return false; // stale — abort the stream
+      buffer += text;
+      if (scenePending) {
+        const head = buffer.replace(/^\s+/, "");
+        if (head === "") return true;
+        if (head[0] === "(") {
+          const close = head.indexOf(")");
+          if (close === -1) return true; // scene line still streaming — keep holding
+          const scene = head.slice(1, close).trim();
+          if (scene) sceneEl = appendSceneCard(scene, typing);
+          buffer = head.slice(close + 1).replace(/^\s+/, "");
+        }
+        scenePending = false;
+      }
       if (!bubble) {
+        if (buffer.trim() === "") return true; // nothing after the scene yet
         typing.remove();
         bubble = appendBubble("assistant", "");
         textEl = bubble.querySelector(".bubble-text");
       }
-      textEl.textContent += text;
+      emit(false);
       scrollToBottom();
       return true;
     },
     finish(reply) {
+      const split = splitScene(reply);
+      const body = split ? split.rest : reply;
       if (!bubble) {
-        bubble = appendBubble("assistant", reply);
-      } else {
-        // Replace with the authoritative reply in case deltas missed anything.
-        textEl.textContent = reply;
+        // never streamed (plain-JSON path) or the whole reply was still held;
+        // typing is already detached here, so append at the end of the log
+        if (split && !sceneEl) sceneEl = appendSceneCard(split.scene);
+        if (body.trim() !== "") bubble = appendBubble("assistant", body);
+        return;
+      }
+      emit(true); // flush the last word
+      // Safety net: if the streamed words drifted from the authoritative reply,
+      // fall back to the plain text (rare; loses the animation but stays correct).
+      if (textEl.textContent !== body) {
+        textEl.textContent = body;
       }
     },
     removePartial() {
       if (bubble) bubble.remove();
+      if (sceneEl) sceneEl.remove();
     },
   };
 }
@@ -501,6 +629,7 @@ function showChatScreen() {
   const topic = TOPICS.find((t) => t.id === state.topic);
   chatFlag.textContent = language.flag;
   chatTopic.textContent = topicLabel(topic);
+  chatMode.hidden = state.mode !== "roleplay";
   startScreen.hidden = true;
   chatScreen.hidden = false;
   state.messages = [];
@@ -514,6 +643,7 @@ function showStartScreen() {
   clearSession();
   state.session += 1;
   state.language = null;
+  state.mode = null;
   state.topic = null;
   state.messages = [];
   state.transcript = [];
@@ -560,6 +690,7 @@ chatForm.addEventListener("submit", (event) => {
 function restoreSession(saved) {
   state.session += 1;
   state.language = saved.language;
+  state.mode = saved.mode === "roleplay" ? "roleplay" : "chat";
   state.topic = saved.topic;
   state.transcript = saved.transcript;
   state.messages = saved.transcript.map((entry) => ({
@@ -571,9 +702,16 @@ function restoreSession(saved) {
   const topic = TOPICS.find((t) => t.id === state.topic);
   chatFlag.textContent = language.flag;
   chatTopic.textContent = topicLabel(topic);
+  chatMode.hidden = state.mode !== "roleplay";
 
   chatLog.replaceChildren();
   saved.transcript.forEach((entry) => {
+    const split = entry.role === "assistant" ? splitScene(entry.content) : null;
+    if (split) {
+      appendSceneCard(split.scene);
+      if (split.rest.trim() !== "") appendBubble("assistant", split.rest);
+      return;
+    }
     const bubble = appendBubble(entry.role, entry.content);
     if (entry.role === "user" && entry.correction) {
       appendCorrection(bubble, entry.content, entry.correction, entry.correctionNote);
@@ -584,7 +722,7 @@ function restoreSession(saved) {
   setBusy(false);
   startScreen.hidden = true;
   chatScreen.hidden = false;
-  scrollToBottom();
+  scrollToBottom(true);
   chatInput.focus();
 }
 
